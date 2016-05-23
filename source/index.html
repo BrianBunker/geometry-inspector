@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width,user-scalable=no">
+
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>geometry-inspector</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/3.16/dijit/themes/nihilo/nihilo.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/3.16/esri/css/esri.css">
+    <style>
+      html, body, #mainWindow {
+        font-family: sans-serif;
+        height: 100%;
+        width: 100%;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+      #map_zoom_slider {
+        top: 20px;
+        right: 20px;
+        left: auto;
+      }
+      #info-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        background-color: white;
+        width: 350px;
+        height: 100%;
+        max-height: 100%;
+        padding: 5px 10px;
+      }
+      .buttons {
+        font-size: 80%;
+      }
+      #geometry-container {
+        overflow: hidden;
+      }
+      .geometry-type {
+        font-weight: 700;
+      }
+      .geometry-text {
+        padding: 5px 10px;
+        font-size: 80%;
+        overflow-y: scroll;
+        width: 93%;
+        height: 100px;
+        max-height: 100px;
+        border: 1px solid #000333;
+        resize: none;
+      }
+      /* Source: http://snipplr.com/view/10979/css-cross-browser-word-wrap */
+      .wordwrap {
+         white-space: pre-wrap;      /* CSS3 */
+         white-space: -moz-pre-wrap; /* Firefox */
+         white-space: -pre-wrap;     /* Opera <7 */
+         white-space: -o-pre-wrap;   /* Opera 7 */
+         word-wrap: break-word;      /* IE */
+      }
+    </style>
+
+    <script src="https://js.arcgis.com/3.16/"></script>
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer/1.0.5/terraformer.min.js"></script>
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-wkt-parser/1.1.0/terraformer-wkt-parser.min.js"></script>
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-arcgis-parser/1.0.4/terraformer-arcgis-parser.min.js"></script>
+    <script>
+      var map, toolbar, symbol, geomTask;
+
+      require([
+        "esri/map",
+        "esri/toolbars/draw",
+        "esri/graphic",
+
+        "esri/geometry/jsonUtils",
+
+        "esri/symbols/SimpleMarkerSymbol",
+        "esri/symbols/SimpleLineSymbol",
+        "esri/symbols/SimpleFillSymbol",
+
+        "dojo/parser", "dijit/registry",
+
+        "dijit/form/Button", "dojo/domReady!"
+      ], function(
+        Map, Draw, Graphic,
+        jsonUtils,
+        SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
+        parser, registry
+      ) {
+        parser.parse();
+
+        map = new Map("map", {
+          basemap: "streets",
+          center: [-100, 30],
+          zoom: 3
+        });
+
+        map.on("load", initListeners);
+
+        // loop through all dijits, connect onClick event
+        // listeners for buttons to activate drawing tools
+        registry.forEach(function(d) {
+          // d is a reference to a dijit
+          // could be a layout container or a button
+          if ( d.declaredClass === "dijit.form.Button" ) {
+            d.on("click", activateTool);
+          }
+        });
+
+        function initListeners() {
+          createToolbar();
+          createTextareaBindings();
+        }
+
+        function createToolbar() {
+          toolbar = new Draw(map);
+          toolbar.on("draw-end", addToMap);
+        }
+
+        function activateTool() {
+          var tool = this.label.toUpperCase().replace(/ /g, "_");
+          toolbar.activate(Draw[tool]);
+        }
+
+        function addToMap(evt) {
+          var symbol;
+          toolbar.deactivate();
+
+          displayGeometryOnMap(evt.geometry);
+
+          setGeometryTextAreas(evt.geometry);
+        }
+
+        function displayGeometryOnMap(geometry) {
+          switch (geometry.type) {
+            case "point":
+            case "multipoint":
+              symbol = new SimpleMarkerSymbol();
+              break;
+            case "polyline":
+              symbol = new SimpleLineSymbol();
+              break;
+            default:
+              symbol = new SimpleFillSymbol();
+              break;
+          }
+          var graphic = new Graphic(geometry, symbol);
+          map.graphics.clear();
+          map.graphics.add(graphic);
+        }
+
+        function setGeometryTextAreas(geometry) {
+          var geoJson = Terraformer.ArcGIS.parse(geometry);
+          var esriJsonGeo = Terraformer.ArcGIS.convert(geoJson);
+          var wkt = Terraformer.WKT.convert(geoJson);
+
+          document.getElementById("geometry-esriJson").value = JSON.stringify(esriJsonGeo, null, '\t');
+          document.getElementById("geometry-geoJson").value = JSON.stringify(geoJson.toJSON(), null, '\t');
+          document.getElementById("geometry-wkt").value = wkt;
+        }
+
+        function createTextareaBindings() {
+          var geometryTextAreaEsriJson = document.querySelector('#geometry-esriJson');
+          var geometryTextAreaGeoJson = document.querySelector('#geometry-geoJson');
+          var geometryTextAreaWkt = document.querySelector('#geometry-wkt');
+
+
+          geometryTextAreaEsriJson.addEventListener("change", updateMapFromEsriJsonInput);
+          geometryTextAreaGeoJson.addEventListener("change", updateMapFromGeoJsonInput);
+          geometryTextAreaWkt.addEventListener("change", updateMapFromWktInput);
+        }
+
+        function updateMapFromEsriJsonInput(evt) {
+          // generate arcgis geometry object
+          var geometryText = document.getElementById("geometry-esriJson").value;
+          var geometryJson = JSON.parse(geometryText);
+          var geometry = jsonUtils.fromJson(geometryJson);
+          displayGeometryOnMap(geometry);
+          setGeometryTextAreas(geometry);
+        }
+
+        function updateMapFromGeoJsonInput(evt) {
+          // generate arcgis geometry object
+          var geometryText = document.getElementById("geometry-geoJson").value;
+          var geometryJson = JSON.parse(geometryText);
+          var esriJson = Terraformer.ArcGIS.convert(geometryJson);
+          var geometry = jsonUtils.fromJson(esriJson);
+          displayGeometryOnMap(geometry);
+          setGeometryTextAreas(geometry);
+        }
+
+        function updateMapFromWktInput(evt) {
+          // generate arcgis geometry object
+          var geometryText = document.getElementById("geometry-wkt").value;
+          var geoJson = Terraformer.WKT.parse(geometryText);
+          var esriJson = Terraformer.ArcGIS.convert(geoJson);
+          var geometry = jsonUtils.fromJson(esriJson);
+          displayGeometryOnMap(geometry);
+          setGeometryTextAreas(geometry);
+        }
+
+      });
+    </script>
+  </head>
+  <body class="nihilo">
+
+    <div id="map"></div>
+
+    <div id="info-panel">
+      <div>
+        <p class="geometry-type">Select a geometry type to draw:</p>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Point</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Multi Point</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Line</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Polyline</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Polygon</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Circle</button>
+        <button class="buttons" data-dojo-type="dijit/form/Button">Ellipse</button>
+      </div>
+      <div id="geometry-container">
+        <p class="geometry-type">esriJson</p>
+        <textarea id="geometry-esriJson" class="geometry-text wordwrap"></textarea>
+        <p class="geometry-type">geoJson</p>
+        <textarea id="geometry-geoJson" class="geometry-text wordwrap"></textarea>
+        <p class="geometry-type">wkt</p>
+        <textarea id="geometry-wkt" class="geometry-text wordwrap"></textarea>
+      </div>
+    </div>
+
+
+  </body>
+</html>
