@@ -21,7 +21,6 @@
       }
       #map {
         height: 100%;
-        width: 100%;
       }
       #map_zoom_slider {
         top: 20px;
@@ -29,14 +28,14 @@
         left: auto;
       }
       #info-panel {
-        position: absolute;
         top: 0;
         left: 0;
+        float: left;
         background-color: white;
         width: 350px;
         height: 100%;
         max-height: 100%;
-        padding: 5px 10px;
+        padding: 0 10px;
       }
       .buttons {
         font-size: 80%;
@@ -72,7 +71,7 @@
     <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-wkt-parser/1.1.0/terraformer-wkt-parser.min.js"></script>
     <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-arcgis-parser/1.0.4/terraformer-arcgis-parser.min.js"></script>
     <script>
-      var map, toolbar, symbol, geomTask;
+      var map, toolbar, symbol, geomTask, geometryInputEsriJson, geometryInputGeoJson, geometryInputWkt;
 
       require([
         "esri/map",
@@ -102,6 +101,10 @@
           zoom: 3
         });
 
+        geometryInputEsriJson = document.getElementById("geometry-esriJson");
+        geometryInputGeoJson = document.getElementById("geometry-geoJson");
+        geometryInputWkt = document.getElementById("geometry-wkt");
+
         map.on("load", initListeners);
 
         // loop through all dijits, connect onClick event
@@ -130,7 +133,6 @@
         }
 
         function addToMap(evt) {
-          var symbol;
           toolbar.deactivate();
 
           displayGeometryOnMap(evt.geometry);
@@ -161,25 +163,20 @@
           var esriJsonGeo = Terraformer.ArcGIS.convert(geoJson);
           var wkt = Terraformer.WKT.convert(geoJson);
 
-          document.getElementById("geometry-esriJson").value = JSON.stringify(esriJsonGeo, null, '\t');
-          document.getElementById("geometry-geoJson").value = JSON.stringify(geoJson.toJSON(), null, '\t');
-          document.getElementById("geometry-wkt").value = wkt;
+          geometryInputEsriJson.value = JSON.stringify(esriJsonGeo, null, '  ');
+          geometryInputGeoJson.value = JSON.stringify(geoJson.toJSON(), null, '  ');
+          geometryInputWkt.value = wkt;
         }
 
         function createTextareaBindings() {
-          var geometryTextAreaEsriJson = document.querySelector('#geometry-esriJson');
-          var geometryTextAreaGeoJson = document.querySelector('#geometry-geoJson');
-          var geometryTextAreaWkt = document.querySelector('#geometry-wkt');
-
-
-          geometryTextAreaEsriJson.addEventListener("change", updateMapFromEsriJsonInput);
-          geometryTextAreaGeoJson.addEventListener("change", updateMapFromGeoJsonInput);
-          geometryTextAreaWkt.addEventListener("change", updateMapFromWktInput);
+          geometryInputEsriJson.addEventListener("change", updateMapFromEsriJsonInput);
+          geometryInputGeoJson.addEventListener("change", updateMapFromGeoJsonInput);
+          geometryInputWkt.addEventListener("change", updateMapFromWktInput);
         }
 
         function updateMapFromEsriJsonInput(evt) {
           // generate arcgis geometry object
-          var geometryText = document.getElementById("geometry-esriJson").value;
+          var geometryText = geometryInputEsriJson.value;
           var geometryJson = JSON.parse(geometryText);
           var geometry = jsonUtils.fromJson(geometryJson);
           displayGeometryOnMap(geometry);
@@ -188,7 +185,7 @@
 
         function updateMapFromGeoJsonInput(evt) {
           // generate arcgis geometry object
-          var geometryText = document.getElementById("geometry-geoJson").value;
+          var geometryText = geometryInputGeoJson.value;
           var geometryJson = JSON.parse(geometryText);
           var esriJson = Terraformer.ArcGIS.convert(geometryJson);
           var geometry = jsonUtils.fromJson(esriJson);
@@ -198,7 +195,7 @@
 
         function updateMapFromWktInput(evt) {
           // generate arcgis geometry object
-          var geometryText = document.getElementById("geometry-wkt").value;
+          var geometryText = geometryInputWkt.value;
           var geoJson = Terraformer.WKT.parse(geometryText);
           var esriJson = Terraformer.ArcGIS.convert(geoJson);
           var geometry = jsonUtils.fromJson(esriJson);
@@ -210,9 +207,6 @@
     </script>
   </head>
   <body class="nihilo">
-
-    <div id="map"></div>
-
     <div id="info-panel">
       <div>
         <p class="geometry-type">Select a geometry type to draw:</p>
@@ -234,6 +228,6 @@
       </div>
     </div>
 
-
+    <div id="map"></div>
   </body>
 </html>
