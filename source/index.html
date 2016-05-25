@@ -96,7 +96,7 @@
         parser.parse();
 
         map = new Map("map", {
-          basemap: "streets",
+          basemap: "hybrid",
           center: [-100, 30],
           zoom: 3
         });
@@ -141,6 +141,10 @@
         }
 
         function displayGeometryOnMap(geometry) {
+          if (geometry.type !== "point") {
+            var extent = geometry.getExtent().expand(1.2);
+            map.setExtent(extent, true);
+          }
           switch (geometry.type) {
             case "point":
             case "multipoint":
