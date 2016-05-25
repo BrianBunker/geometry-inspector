@@ -7,7 +7,16 @@
     <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
     <title>geometry-inspector</title>
 
-    <link rel="stylesheet" href="https://js.arcgis.com/3.16/dijit/themes/nihilo/nihilo.css">
+    <!-- bootstrap -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+    <!-- terraformer -->
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer/1.0.5/terraformer.min.js"></script>
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-wkt-parser/1.1.0/terraformer-wkt-parser.min.js"></script>
+    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-arcgis-parser/1.0.4/terraformer-arcgis-parser.min.js"></script>
+
+    <!-- arcgis -->
+    <script src="https://js.arcgis.com/3.16/"></script>
     <link rel="stylesheet" href="https://js.arcgis.com/3.16/esri/css/esri.css">
     <style>
       html, body, #mainWindow {
@@ -31,45 +40,25 @@
         top: 0;
         left: 0;
         float: left;
-        background-color: white;
+        background-color: #F8F8FF;
         width: 350px;
         height: 100%;
-        max-height: 100%;
-        padding: 0 10px;
-      }
-      .buttons {
-        font-size: 80%;
+        padding: 5px 10px;
+        text-align:center;
+        overflow: auto;
       }
       #geometry-container {
         overflow: hidden;
       }
-      .geometry-type {
-        font-weight: 700;
+      .btn {
+        margin: 3px;
       }
       .geometry-text {
-        padding: 5px 10px;
-        font-size: 80%;
-        overflow-y: scroll;
-        width: 93%;
-        height: 100px;
-        max-height: 100px;
-        border: 1px solid #000333;
-        resize: none;
-      }
-      /* Source: http://snipplr.com/view/10979/css-cross-browser-word-wrap */
-      .wordwrap {
-         white-space: pre-wrap;      /* CSS3 */
-         white-space: -moz-pre-wrap; /* Firefox */
-         white-space: -pre-wrap;     /* Opera <7 */
-         white-space: -o-pre-wrap;   /* Opera 7 */
-         word-wrap: break-word;      /* IE */
+        font-size: 90%;
+        resize: vertical;
       }
     </style>
 
-    <script src="https://js.arcgis.com/3.16/"></script>
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer/1.0.5/terraformer.min.js"></script>
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-wkt-parser/1.1.0/terraformer-wkt-parser.min.js"></script>
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-arcgis-parser/1.0.4/terraformer-arcgis-parser.min.js"></script>
     <script>
       var map, toolbar, symbol, geomTask, geometryInputEsriJson, geometryInputGeoJson, geometryInputWkt;
 
@@ -86,7 +75,7 @@
 
         "dojo/parser", "dijit/registry",
 
-        "dijit/form/Button", "dojo/domReady!"
+        "dojo/domReady!"
       ], function(
         Map, Draw, Graphic,
         jsonUtils,
@@ -101,21 +90,20 @@
           zoom: 3
         });
 
+        geometryInputForm = document.getElementById("geometry-container");
         geometryInputEsriJson = document.getElementById("geometry-esriJson");
         geometryInputGeoJson = document.getElementById("geometry-geoJson");
         geometryInputWkt = document.getElementById("geometry-wkt");
 
         map.on("load", initListeners);
 
-        // loop through all dijits, connect onClick event
+        // loop through all buttons, connect onClick event
         // listeners for buttons to activate drawing tools
-        registry.forEach(function(d) {
-          // d is a reference to a dijit
-          // could be a layout container or a button
-          if ( d.declaredClass === "dijit.form.Button" ) {
-            d.on("click", activateTool);
-          }
-        });
+        var buttonsNL = document.querySelectorAll("button");
+        for (var i = 0; i < buttonsNL.length; ++i) {
+          var button = buttonsNL[i];
+          button.addEventListener("click", activateTool);
+        }
 
         function initListeners() {
           createToolbar();
@@ -127,8 +115,8 @@
           toolbar.on("draw-end", addToMap);
         }
 
-        function activateTool() {
-          var tool = this.label.toUpperCase().replace(/ /g, "_");
+        function activateTool(evt) {
+          var tool = evt.target.id.toUpperCase().replace(/ /g, "_");
           toolbar.activate(Draw[tool]);
         }
 
@@ -141,6 +129,7 @@
         }
 
         function displayGeometryOnMap(geometry) {
+          resetInputClass();
           if (geometry.type !== "point") {
             var extent = geometry.getExtent().expand(1.2);
             map.setExtent(extent, true);
@@ -179,56 +168,77 @@
         }
 
         function updateMapFromEsriJsonInput(evt) {
-          // generate arcgis geometry object
-          var geometryText = geometryInputEsriJson.value;
-          var geometryJson = JSON.parse(geometryText);
-          var geometry = jsonUtils.fromJson(geometryJson);
-          displayGeometryOnMap(geometry);
-          setGeometryTextAreas(geometry);
+          try {
+            // generate arcgis geometry object
+            var geometryText = geometryInputEsriJson.value;
+            var geometryJson = JSON.parse(geometryText);
+            var geometry = jsonUtils.fromJson(geometryJson);
+            displayGeometryOnMap(geometry);
+            setGeometryTextAreas(geometry);
+          } catch (err) {
+            handleBadInput(evt);
+          }
         }
 
         function updateMapFromGeoJsonInput(evt) {
-          // generate arcgis geometry object
-          var geometryText = geometryInputGeoJson.value;
-          var geometryJson = JSON.parse(geometryText);
-          var esriJson = Terraformer.ArcGIS.convert(geometryJson);
-          var geometry = jsonUtils.fromJson(esriJson);
-          displayGeometryOnMap(geometry);
-          setGeometryTextAreas(geometry);
+          try {
+            // generate arcgis geometry object
+            var geometryText = geometryInputGeoJson.value;
+            var geometryJson = JSON.parse(geometryText);
+            var esriJson = Terraformer.ArcGIS.convert(geometryJson);
+            var geometry = jsonUtils.fromJson(esriJson);
+            displayGeometryOnMap(geometry);
+            setGeometryTextAreas(geometry);
+          } catch (err) {
+            handleBadInput(evt);
+          }
         }
 
         function updateMapFromWktInput(evt) {
-          // generate arcgis geometry object
-          var geometryText = geometryInputWkt.value;
-          var geoJson = Terraformer.WKT.parse(geometryText);
-          var esriJson = Terraformer.ArcGIS.convert(geoJson);
-          var geometry = jsonUtils.fromJson(esriJson);
-          displayGeometryOnMap(geometry);
-          setGeometryTextAreas(geometry);
+          try {
+            // generate arcgis geometry object
+            var geometryText = geometryInputWkt.value;
+            var geoJson = Terraformer.WKT.parse(geometryText);
+            var esriJson = Terraformer.ArcGIS.convert(geoJson);
+            var geometry = jsonUtils.fromJson(esriJson);
+            displayGeometryOnMap(geometry);
+            setGeometryTextAreas(geometry);
+          } catch (err) {
+            handleBadInput(evt);
+          }
+        }
+
+        function resetInputClass() {
+          geometryInputForm.classList.remove("has-error");
+        }
+
+        function handleBadInput() {
+          geometryInputForm.classList.add("has-error");
         }
 
       });
     </script>
   </head>
-  <body class="nihilo">
+  <body>
     <div id="info-panel">
       <div>
-        <p class="geometry-type">Select a geometry type to draw:</p>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Point</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Multi Point</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Line</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Polyline</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Polygon</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Circle</button>
-        <button class="buttons" data-dojo-type="dijit/form/Button">Ellipse</button>
+        <h3 class="text-muted">Draw a shape</h3>
+        <button id="point" type="button" class="btn btn-default">Point</button>
+        <button id="multi_point" type="button" class="btn btn-default">Multi Point</button>
+        <button id="line" type="button" class="btn btn-default">Line</button>
+        <button id="polyline" type="button" class="btn btn-default">Polyline</button>
+        <button id="polygon" type="button" class="btn btn-default">Polygon</button>
+        <button id="circle" type="button" class="btn btn-default">Circle</button>
+        <button id="ellipse" type="button" class="btn btn-default">Ellipse</button>
       </div>
       <div id="geometry-container">
-        <p class="geometry-type">esriJson</p>
-        <textarea id="geometry-esriJson" class="geometry-text wordwrap"></textarea>
-        <p class="geometry-type">geoJson</p>
-        <textarea id="geometry-geoJson" class="geometry-text wordwrap"></textarea>
-        <p class="geometry-type">wkt</p>
-        <textarea id="geometry-wkt" class="geometry-text wordwrap"></textarea>
+        <h3 class="text-muted">Or paste/edit</h3>
+        <h4 class="control-label text-muted" for="geometry-esriJson">esriJson</h4>
+        <textarea id="geometry-esriJson" class="form-control geometry-text form-control" rows=5></textarea>
+        <h4 class="control-label text-muted" for="geometry-geoJson">geoJson</h4>
+        <textarea id="geometry-geoJson" class="form-control geometry-text form-control" rows=5></textarea>
+        <h4 class="control-label text-muted" for="geometry-wkt">wkt</h4>
+        <textarea id="geometry-wkt" class="form-control geometry-text form-control" rows=5></textarea>
       </div>
     </div>
 
