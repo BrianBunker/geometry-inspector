@@ -8,16 +8,14 @@
     <title>geometry-inspector</title>
 
     <!-- bootstrap -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
-
-    <!-- terraformer -->
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer/1.0.5/terraformer.min.js"></script>
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-wkt-parser/1.1.0/terraformer-wkt-parser.min.js"></script>
-    <script src="http://cdn-geoweb.s3.amazonaws.com/terraformer-arcgis-parser/1.0.4/terraformer-arcgis-parser.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
 
     <!-- arcgis -->
-    <script src="https://js.arcgis.com/3.16/"></script>
-    <link rel="stylesheet" href="https://js.arcgis.com/3.16/esri/css/esri.css">
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.24/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.24/"></script>
     <style>
       html, body, #mainWindow {
         font-family: sans-serif;
@@ -58,44 +56,44 @@
         resize: vertical;
       }
     </style>
+    <script type='module'>
+      import { wktToGeoJSON, geojsonToWKT } from 'https://unpkg.com/@terraformer/wkt?module';
+      import { arcgisToGeoJSON, geojsonToArcGIS } from 'https://unpkg.com/@terraformer/arcgis?module';
 
-    <script>
-      var map, toolbar, symbol, geomTask, geometryInputEsriJson, geometryInputGeoJson, geometryInputWkt;
+      let draw, currentDrawActionName, currentDrawAction;
 
       require([
-        "esri/map",
-        "esri/toolbars/draw",
-        "esri/graphic",
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/views/draw/Draw",
+        "esri/Graphic",
+        "esri/geometry/support/jsonUtils",
 
-        "esri/geometry/jsonUtils",
-
-        "esri/symbols/SimpleMarkerSymbol",
-        "esri/symbols/SimpleLineSymbol",
-        "esri/symbols/SimpleFillSymbol",
-
-        "dojo/parser", "dijit/registry",
-
-        "dojo/domReady!"
+        "esri/geometry/Point",
+        "esri/geometry/Multipoint",
+        "esri/geometry/Polyline",
+        "esri/geometry/Polygon"
       ], function(
-        Map, Draw, Graphic,
-        jsonUtils,
-        SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
-        parser, registry
+        Map, MapView, Draw, Graphic, jsonUtils,
+        Point, Multipoint, Polyline, Polygon
       ) {
-        parser.parse();
 
-        map = new Map("map", {
-          basemap: "hybrid",
+        const map = new Map({
+          basemap: "hybrid"
+        });
+        const view = new MapView({
+          container: "map",
+          map: map,
           center: [-100, 30],
           zoom: 3
         });
 
-        geometryInputForm = document.getElementById("geometry-container");
-        geometryInputEsriJson = document.getElementById("geometry-esriJson");
-        geometryInputGeoJson = document.getElementById("geometry-geoJson");
-        geometryInputWkt = document.getElementById("geometry-wkt");
+        const geometryInputEsriJson = document.getElementById("geometry-esriJson");
+        const geometryInputGeoJson = document.getElementById("geometry-geoJson");
+        const geometryInputWkt = document.getElementById("geometry-wkt");
 
-        map.on("load", initListeners);
+        draw = new Draw({view: view});
+        createTextareaBindings();
 
         // loop through all buttons, connect onClick event
         // listeners for buttons to activate drawing tools
@@ -105,60 +103,115 @@
           button.addEventListener("click", activateTool);
         }
 
-        function initListeners() {
-          createToolbar();
-          createTextareaBindings();
-        }
-
-        function createToolbar() {
-          toolbar = new Draw(map);
-          toolbar.on("draw-end", addToMap);
-        }
-
         function activateTool(evt) {
-          var tool = evt.target.id.toUpperCase().replace(/ /g, "_");
-          toolbar.activate(Draw[tool]);
+          view.graphics.removeAll();
+          currentDrawActionName = evt.target.id.toUpperCase().replace(/ /g, "_").toLowerCase();
+          currentDrawAction = draw.create(currentDrawActionName);
+          view.focus();
+
+          currentDrawAction.on(
+            [
+              "vertex-add",
+              "vertex-remove",
+              "cursor-update",
+              "redo",
+              "undo",
+              "draw-complete"
+            ],
+            addToMap
+          );
         }
 
-        function addToMap(evt) {
-          toolbar.deactivate();
-
-          displayGeometryOnMap(evt.geometry);
-
-          setGeometryTextAreas(evt.geometry);
+        function addToMap(event) {
+          
+          const currentGeometry = getCurrentGeometry(event.vertices);
+          displayGeometryOnMap(currentGeometry);
         }
 
         function displayGeometryOnMap(geometry) {
-          resetInputClass();
-          if (geometry.type !== "point") {
-            var extent = geometry.getExtent().expand(1.2);
-            map.setExtent(extent, true);
+          view.graphics.removeAll();
+
+          const graphic = new Graphic({
+            geometry: geometry,
+            symbol: getCurrentSymbol()
+          });
+
+          view.graphics.add(graphic);
+
+          setGeometryTextAreas(geometry);
+        }
+
+        function getCurrentGeometry(vertices) {
+          let geometry = {
+            type: currentDrawActionName,
+            spatialReference: view.spatialReference
+          };
+          if (currentDrawActionName === "point") {
+            Object.assign(geometry, {
+              x: vertices[0][0],
+              y: vertices[0][1]
+            });
+            return Point.fromJSON(geometry);
           }
-          switch (geometry.type) {
+          else if (currentDrawActionName === "multipoint") {
+            Object.assign(geometry, {
+              points: vertices
+            });
+            return Multipoint.fromJSON(geometry);
+          }
+          else if (currentDrawActionName ==="polyline") {
+            Object.assign(geometry, {
+              paths: vertices
+            });
+            return Polyline.fromJSON(geometry);
+          }
+          else if (currentDrawActionName === "polygon") {
+            Object.assign(geometry, {
+              rings: vertices
+            });
+            return Polygon.fromJSON(geometry);
+          }
+        }
+
+        function getCurrentSymbol() {
+          let symbol = {
+            color: [4, 90, 141],
+            width: 4
+          };
+          switch (currentDrawActionName) {
             case "point":
             case "multipoint":
-              symbol = new SimpleMarkerSymbol();
+              Object.assign(symbol, {type: "simple-marker"});
               break;
             case "polyline":
-              symbol = new SimpleLineSymbol();
+              Object.assign(symbol, {
+                type: "simple-line",
+                cap: "round",
+                join: "round"
+              });
               break;
-            default:
-              symbol = new SimpleFillSymbol();
+            case "polygon":
+              Object.assign(symbol, {
+                type: "simple-fill",
+                color: [4, 90, 141, 0.25],
+                outline: {
+                  color: [4, 90, 141],
+                  width: 4
+                }
+              });
               break;
           }
-          var graphic = new Graphic(geometry, symbol);
-          map.graphics.clear();
-          map.graphics.add(graphic);
+          return symbol;
         }
 
         function setGeometryTextAreas(geometry) {
-          var geoJson = Terraformer.ArcGIS.parse(geometry);
-          var esriJsonGeo = Terraformer.ArcGIS.convert(geoJson);
-          var wkt = Terraformer.WKT.convert(geoJson);
+          const geojson = arcgisToGeoJSON(geometry);
+          const wkt = geojsonToWKT(geojson);
 
-          geometryInputEsriJson.value = JSON.stringify(esriJsonGeo, null, '  ');
-          geometryInputGeoJson.value = JSON.stringify(geoJson.toJSON(), null, '  ');
+          geometryInputEsriJson.value = JSON.stringify(geometry, null, '  ');
+          geometryInputGeoJson.value = JSON.stringify(geojson, null, '  ');
           geometryInputWkt.value = wkt;
+          resetInputClass();
         }
 
         function createTextareaBindings() {
@@ -172,11 +225,11 @@
             // generate arcgis geometry object
             var geometryText = geometryInputEsriJson.value;
             var geometryJson = JSON.parse(geometryText);
-            var geometry = jsonUtils.fromJson(geometryJson);
+            var geometry = jsonUtils.fromJSON(geometryJson);
             displayGeometryOnMap(geometry);
             setGeometryTextAreas(geometry);
           } catch (err) {
-            handleBadInput(evt);
+            geometryInputEsriJson.classList.add("is-invalid");
           }
         }
 
@@ -185,12 +238,12 @@
             // generate arcgis geometry object
             var geometryText = geometryInputGeoJson.value;
             var geometryJson = JSON.parse(geometryText);
-            var esriJson = Terraformer.ArcGIS.convert(geometryJson);
-            var geometry = jsonUtils.fromJson(esriJson);
+            var esriJson = arcgisToGeoJSON(geometryJson);
+            var geometry = jsonUtils.fromJSON(esriJson);
             displayGeometryOnMap(geometry);
             setGeometryTextAreas(geometry);
           } catch (err) {
-            handleBadInput(evt);
+            geometryInputGeoJson.classList.add("is-invalid");
           }
         }
 
@@ -198,22 +251,20 @@
           try {
             // generate arcgis geometry object
             var geometryText = geometryInputWkt.value;
-            var geoJson = Terraformer.WKT.parse(geometryText);
-            var esriJson = Terraformer.ArcGIS.convert(geoJson);
-            var geometry = jsonUtils.fromJson(esriJson);
+            var geoJson = wktToGeoJSON(geometryText);
+            var esriJson = geojsonToArcGIS(geoJson);
+            var geometry = jsonUtils.fromJSON(esriJson);
             displayGeometryOnMap(geometry);
             setGeometryTextAreas(geometry);
           } catch (err) {
-            handleBadInput(evt);
+            geometryInputWkt.classList.add("is-invalid");
           }
         }
 
         function resetInputClass() {
-          geometryInputForm.classList.remove("has-error");
-        }
-
-        function handleBadInput() {
-          geometryInputForm.classList.add("has-error");
+          geometryInputEsriJson.classList.remove("is-invalid");
+          geometryInputGeoJson.classList.remove("is-invalid");
+          geometryInputWkt.classList.remove("is-invalid");
         }
 
       });
@@ -224,12 +275,9 @@
       <div>
         <h3 class="text-muted">Draw a shape</h3>
         <button id="point" type="button" class="btn btn-default">Point</button>
-        <button id="multi_point" type="button" class="btn btn-default">Multi Point</button>
-        <button id="line" type="button" class="btn btn-default">Line</button>
+        <button id="multipoint" type="button" class="btn btn-default">Multi Point</button>
         <button id="polyline" type="button" class="btn btn-default">Polyline</button>
         <button id="polygon" type="button" class="btn btn-default">Polygon</button>
-        <button id="circle" type="button" class="btn btn-default">Circle</button>
-        <button id="ellipse" type="button" class="btn btn-default">Ellipse</button>
       </div>
       <div id="geometry-container">
         <h3 class="text-muted">Or paste/edit</h3>
