@@ -70,13 +70,14 @@
         "esri/views/draw/Draw",
         "esri/Graphic",
         "esri/geometry/support/jsonUtils",
+        "esri/geometry/support/webMercatorUtils",
 
         "esri/geometry/Point",
         "esri/geometry/Multipoint",
         "esri/geometry/Polyline",
         "esri/geometry/Polygon"
       ], function(
-        Map, MapView, Basemap, WebTileLayer, Draw, Graphic, jsonUtils,
+        Map, MapView, Basemap, WebTileLayer, Draw, Graphic, jsonUtils, WebMercatorUtils,
         Point, Multipoint, Polyline, Polygon
       ) {
  
@@ -164,26 +165,27 @@
               x: vertices[0][0],
               y: vertices[0][1]
             });
-            return Point.fromJSON(geometry);
+            geometry = Point.fromJSON(geometry);
           }
           else if (currentDrawActionName === "multipoint") {
             Object.assign(geometry, {
               points: vertices
             });
-            return Multipoint.fromJSON(geometry);
+            geometry = Multipoint.fromJSON(geometry);
           }
           else if (currentDrawActionName ==="polyline") {
             Object.assign(geometry, {
               paths: vertices
             });
-            return Polyline.fromJSON(geometry);
+            geometry = Polyline.fromJSON(geometry);
           }
           else if (currentDrawActionName === "polygon") {
             Object.assign(geometry, {
               rings: vertices
             });
-            return Polygon.fromJSON(geometry);
+            geometry = Polygon.fromJSON(geometry);
           }
+          return WebMercatorUtils.webMercatorToGeographic(geometry);
         }
 
         function getCurrentSymbol() {
