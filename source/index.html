@@ -65,6 +65,8 @@
       require([
         "esri/Map",
         "esri/views/MapView",
+        "esri/Basemap",
+        "esri/layers/WebTileLayer",
         "esri/views/draw/Draw",
         "esri/Graphic",
         "esri/geometry/support/jsonUtils",
@@ -74,12 +76,23 @@
         "esri/geometry/Polyline",
         "esri/geometry/Polygon"
       ], function(
-        Map, MapView, Draw, Graphic, jsonUtils,
+        Map, MapView, Basemap, WebTileLayer, Draw, Graphic, jsonUtils,
         Point, Multipoint, Polyline, Polygon
       ) {
+ 
+        const mapBaseLayer = new WebTileLayer({
+          urlTemplate: "http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        });
+
+        const eSat = new Basemap({
+          baseLayers: [mapBaseLayer],
+          title: "ESat",
+          id: "esat",
+          thumbnailUrl: "https://stamen-tiles.a.ssl.fastly.net/terrain/10/177/409.png"
+        });
 
         const map = new Map({
-          basemap: "hybrid"
+          basemap: eSat
         });
         const view = new MapView({
           container: "map",
