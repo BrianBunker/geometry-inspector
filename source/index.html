@@ -253,7 +253,7 @@
             // generate arcgis geometry object
             var geometryText = geometryInputGeoJson.value;
             var geometryJson = JSON.parse(geometryText);
-            var esriJson = arcgisToGeoJSON(geometryJson);
+            var esriJson = geojsonToArcGIS(geometryJson);
             var geometry = jsonUtils.fromJSON(esriJson);
             displayGeometryOnMap(geometry);
             setGeometryTextAreas(geometry);
